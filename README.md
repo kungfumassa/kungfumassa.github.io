@@ -1,1 +1,820 @@
-test
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Comprehensive Beer & Cider Dashboard</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- D3.js for visualizations -->
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f3f4f6; /* Light gray background */
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 1rem;
+        }
+        .table-container {
+            overflow-x: auto;
+            background-color: #ffffff;
+            border-radius: 0.5rem;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        th, td {
+            padding: 12px 16px;
+            text-align: left;
+            border-bottom: 1px solid #e5e7eb; /* Light gray border */
+        }
+        th {
+            background-color: #f9fafb; /* Slightly darker gray for headers */
+            font-weight: 600;
+            color: #374151; /* Darker text for headers */
+            text-transform: uppercase;
+            font-size: 0.875rem; /* text-sm */
+            cursor: pointer; /* Indicate sortability */
+            position: relative;
+        }
+        th:hover {
+            background-color: #e5e7eb; /* Slightly darker hover for headers */
+        }
+        .sort-icon {
+            position: absolute;
+            right: 0.5rem;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 1rem;
+            height: 1rem;
+            color: #9ca3af; /* Gray color for inactive sort icons */
+        }
+        .sort-icon.active {
+            color: #4f46e5; /* Indigo for active sort icon */
+        }
+        .filter-control {
+            appearance: none; /* Remove default arrow */
+            -webkit-appearance: none;
+            -moz-appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='currentColor'%3E%3Cpath fill-rule='evenodd' d='M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z' clip-rule='evenodd'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 0.75rem center;
+            background-size: 1.5em;
+            padding-right: 2.5rem;
+        }
+        .slider-group {
+            margin-top: 1rem;
+            padding: 1rem;
+            background-color: #f9fafb;
+            border-radius: 0.375rem;
+            box-shadow: inset 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+        }
+        .slider-label {
+            font-size: 0.875rem; /* text-sm */
+            font-weight: 500;
+            color: #4b5563;
+        }
+        .slider {
+            width: 100%;
+            -webkit-appearance: none;
+            appearance: none;
+            height: 8px;
+            background: #d1d5db;
+            outline: none;
+            opacity: 0.7;
+            transition: opacity .2s;
+            border-radius: 4px;
+        }
+        .slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: #4f46e5;
+            cursor: pointer;
+            border: 2px solid #ffffff;
+            box-shadow: 0 0 0 1px rgba(0,0,0,0.1);
+        }
+        .slider::-moz-range-thumb {
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: #4f46e5;
+            cursor: pointer;
+            border: 2px solid #ffffff;
+            box-shadow: 0 0 0 1px rgba(0,0,0,0.1);
+        }
+        .chart-container {
+            background-color: #ffffff;
+            border-radius: 0.5rem;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+        .chart-title {
+            font-size: 1.25rem; /* text-xl */
+            font-weight: 600;
+            color: #374151;
+            margin-bottom: 1rem;
+            text-align: center;
+        }
+        .axis text {
+            font-size: 0.75rem; /* text-xs */
+            fill: #6b7280;
+        }
+        .axis path, .axis line {
+            stroke: #d1d5db;
+        }
+        .bar {
+            fill: #6366f1; /* Indigo-500 */
+        }
+        .dot {
+            fill: #6366f1;
+            opacity: 0.7;
+        }
+        @media (max-width: 768px) {
+            .table-container {
+                border-radius: 0;
+            }
+            th, td {
+                padding: 8px 12px;
+            }
+            .filter-control, .search-input, .price-unit-select {
+                width: 100%;
+                margin-bottom: 0.5rem;
+            }
+            .filter-section {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+            .filter-label {
+                margin-bottom: 0.5rem;
+            }
+            .chart-container {
+                padding: 1rem;
+            }
+        }
+    </style>
+</head>
+<body class="bg-gray-100 p-4 sm:p-6">
+    <div class="container bg-white rounded-lg shadow-xl p-6">
+        <h1 class="text-3xl font-bold text-gray-800 mb-6 text-center">Comprehensive Beer & Cider Dashboard</h1>
+
+        <!-- Filter and Search Section -->
+        <div class="mb-6 p-4 bg-blue-50 rounded-lg flex flex-wrap items-center justify-between gap-4 shadow-md filter-section">
+            <div class="w-full sm:w-auto flex-grow">
+                <label for="beerTypeFilter" class="text-lg font-medium text-blue-700 mb-2 sm:mb-0 block filter-label">Filter by Type:</label>
+                <select id="beerTypeFilter" class="filter-control mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md shadow-sm">
+                    <option value="All">All Types</option>
+                </select>
+            </div>
+
+            <div class="w-full sm:w-auto flex-grow">
+                <label for="searchBar" class="text-lg font-medium text-blue-700 mb-2 sm:mb-0 block filter-label">Search by Brand/Brewery:</label>
+                <input type="text" id="searchBar" placeholder="e.g., Budweiser, Rogue" class="search-input mt-1 block w-full pl-3 pr-3 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md shadow-sm">
+            </div>
+
+            <div class="w-full sm:w-auto flex-grow">
+                <label for="priceUnit" class="text-lg font-medium text-blue-700 mb-2 sm:mb-0 block filter-label">Price Unit:</label>
+                <select id="priceUnit" class="price-unit-select mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md shadow-sm">
+                    <option value="12oz">Per 12oz</option>
+                    <option value="liter">Per Liter</option>
+                </select>
+            </div>
+
+            <div class="w-full">
+                <div class="slider-group">
+                    <label for="abvMin" class="slider-label">ABV Range: <span id="abvRangeDisplay"></span></label>
+                    <input type="range" id="abvMin" class="slider" min="0" max="15" value="0" step="0.1">
+                    <input type="range" id="abvMax" class="slider" min="0" max="15" value="15" step="0.1">
+                </div>
+                <div class="slider-group">
+                    <label for="priceMin" class="slider-label">Price Range (<span id="currentPriceUnitDisplay">per 12oz</span>): <span id="priceRangeDisplay"></span></label>
+                    <input type="range" id="priceMin" class="slider" min="0" max="10" value="0" step="0.1">
+                    <input type="range" id="priceMax" class="slider" min="0" max="10" value="10" step="0.1">
+                </div>
+            </div>
+        </div>
+
+        <!-- Charts Section -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+            <div class="chart-container">
+                <h2 class="chart-title">Top 10 Beers by Price-to-Alcohol Value (Lower is Better)</h2>
+                <svg id="valueChart"></svg>
+            </div>
+            <div class="chart-container">
+                <h2 class="chart-title">Price vs. ABV</h2>
+                <svg id="scatterPlot"></svg>
+            </div>
+        </div>
+
+        <!-- Beer Data Table -->
+        <div class="table-container">
+            <table id="beerTable" class="min-w-full divide-y divide-gray-200">
+                <thead class="bg-gray-50">
+                    <tr>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider rounded-tl-lg" data-column="brand">
+                            Brand
+                            <span class="sort-icon" data-order="none">
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 11L12 6L17 11M17 13L12 18L7 13" />
+                                </svg>
+                            </span>
+                        </th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider" data-column="type">
+                            Type
+                            <span class="sort-icon" data-order="none">
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 11L12 6L17 11M17 13L12 18L7 13" />
+                                </svg>
+                            </span>
+                        </th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider" data-column="brewery">
+                            Brewery
+                            <span class="sort-icon" data-order="none">
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 11L12 6L17 11M17 13L12 18L7 13" />
+                                </svg>
+                            </span>
+                        </th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider" data-column="origin">
+                            Origin
+                            <span class="sort-icon" data-order="none">
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 11L12 6L17 11M17 13L12 18L7 13" />
+                                </svg>
+                            </span>
+                        </th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider" data-column="pricePer12Oz">
+                            Avg. Price (<span id="tablePriceUnit">per 12oz</span>)
+                            <span class="sort-icon" data-order="none">
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 11L12 6L17 11M17 13L12 18L7 13" />
+                                </svg>
+                            </span>
+                        </th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider" data-column="abv">
+                            ABV (%)
+                            <span class="sort-icon" data-order="none">
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 11L12 6L17 11M17 13L12 18L7 13" />
+                                </svg>
+                            </span>
+                        </th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider rounded-tr-lg" data-column="priceToAlcohol">
+                            Price-to-Alcohol Value
+                            <span class="sort-icon" data-order="none">
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 11L12 6L17 11M17 13L12 18L7 13" />
+                                </svg>
+                            </span>
+                        </th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider rounded-tr-lg" data-column="tastingNotes">
+                            Tasting Notes
+                            <span class="sort-icon" data-order="none">
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 11L12 6L17 11M17 13L12 18L7 13" />
+                                </svg>
+                            </span>
+                        </th>
+                    </tr>
+                </thead>
+                <tbody class="bg-white divide-y divide-gray-200" id="beerTableBody">
+                    <!-- Table rows will be populated by JavaScript -->
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Disclaimer -->
+        <div class="mt-8 p-4 bg-gray-100 rounded-lg text-sm text-gray-600 shadow-inner">
+            <p class="font-semibold">Disclaimer:</p>
+            <p>All prices are approximate average retail prices for a 12oz serving equivalent (or per liter as selected) and can vary significantly based on location, retailer, sales, and packaging size. Alcohol percentages (ABV) are also averages and may vary slightly by batch or region. This dashboard is for informational purposes only and should not be used as a definitive pricing guide.</p>
+        </div>
+    </div>
+
+    <script>
+        // Data for beer brands, including new attributes
+        const beerData = [
+            { brand: "Bud Light", type: "Lager", brewery: "Anheuser-Busch", origin: "USA", pricePer12Oz: 1.00, abv: 4.2, tastingNotes: "Light, crisp, refreshing" },
+            { brand: "Coors Light", type: "Lager", brewery: "Molson Coors", origin: "USA", pricePer12Oz: 1.00, abv: 4.2, tastingNotes: "Light, clean, mountain cold" },
+            { brand: "Miller Lite", type: "Lager", brewery: "Molson Coors", origin: "USA", pricePer12Oz: 1.00, abv: 4.2, tastingNotes: "Light, smooth, American pilsner" },
+            { brand: "Budweiser", type: "Lager", brewery: "Anheuser-Busch", origin: "USA", pricePer12Oz: 1.00, abv: 5.0, tastingNotes: "Classic American lager, malty" },
+            { brand: "Corona Extra", type: "Lager", brewery: "Grupo Modelo", origin: "Mexico", pricePer12Oz: 1.20, abv: 4.6, tastingNotes: "Light, refreshing, best with a lime" },
+            { brand: "Heineken", type: "Lager", brewery: "Heineken", origin: "Netherlands", pricePer12Oz: 1.50, abv: 5.0, tastingNotes: "Crisp, clean, slightly fruity" },
+            { brand: "Stella Artois", type: "Lager", brewery: "AB InBev", origin: "Belgium", pricePer12Oz: 1.50, abv: 5.0, tastingNotes: "Pale lager, floral hops, refreshing" },
+            { brand: "Yuengling Traditional Lager", type: "Lager", brewery: "D.G. Yuengling & Son", origin: "USA", pricePer12Oz: 0.80, abv: 4.5, tastingNotes: "Rich amber, caramel malt, balanced" },
+            { brand: "Pabst Blue Ribbon (PBR)", type: "Lager", brewery: "Pabst Brewing Co.", origin: "USA", pricePer12Oz: 0.60, abv: 4.74, tastingNotes: "Light, mild, classic American" },
+            { brand: "Michelob Ultra", type: "Lager", brewery: "Anheuser-Busch", origin: "USA", pricePer12Oz: 1.00, abv: 4.2, tastingNotes: "Light, low-carb, crisp finish" },
+            { brand: "Guinness Draught", type: "Stout", brewery: "Guinness", origin: "Ireland", pricePer12Oz: 1.70, abv: 4.2, tastingNotes: "Dark, creamy, roasted coffee and chocolate" },
+            { brand: "Left Hand Milk Stout Nitro", type: "Stout", brewery: "Left Hand Brewing Co.", origin: "USA", pricePer12Oz: 2.15, abv: 6.0, tastingNotes: "Sweet, creamy, notes of coffee and chocolate" },
+            { brand: "Blue Moon Belgian White", type: "Witbier", brewery: "Blue Moon Brewing Co.", origin: "USA", pricePer12Oz: 1.40, abv: 5.4, tastingNotes: "Orange peel, coriander, hazy, refreshing" },
+            { brand: "Sierra Nevada Pale Ale", type: "Pale Ale", brewery: "Sierra Nevada Brewing Co.", origin: "USA", pricePer12Oz: 1.25, abv: 5.6, tastingNotes: "Piney, citrusy, balanced hop bitterness" },
+            { brand: "Lagunitas IPA", type: "IPA", brewery: "Lagunitas Brewing Co.", origin: "USA", pricePer12Oz: 1.20, abv: 6.2, tastingNotes: "Hoppy, citrusy, smooth malt backbone" },
+            { brand: "Samuel Adams Boston Lager", type: "Lager", brewery: "Boston Beer Company", origin: "USA", pricePer12Oz: 1.30, abv: 5.0, tastingNotes: "Malty, hoppy, balanced, full-bodied" },
+            { brand: "Dogfish Head 60 Minute IPA", type: "IPA", brewery: "Dogfish Head Craft Brewery", origin: "USA", pricePer12Oz: 1.80, abv: 6.0, tastingNotes: "Continuously hopped, pungent, citrusy" },
+            { brand: "New Belgium Voodoo Ranger Imperial IPA", type: "Imperial IPA", brewery: "New Belgium Brewing Co.", origin: "USA", pricePer12Oz: 1.67, abv: 9.0, tastingNotes: "Bold, fruity, piney, complex" },
+            { brand: "Stone IPA", type: "IPA", brewery: "Stone Brewing", origin: "USA", pricePer12Oz: 1.60, abv: 6.9, tastingNotes: "Aggressively hopped, pine, citrus, bitter" },
+            { brand: "Bell's Two Hearted Ale", type: "IPA", brewery: "Bell's Brewery", origin: "USA", pricePer12Oz: 1.50, abv: 7.0, tastingNotes: "Grapefruit, pine, balanced" },
+            { brand: "New Glarus Spotted Cow", type: "Farmhouse Ale", brewery: "New Glarus Brewing Co.", origin: "USA", pricePer12Oz: 1.90, abv: 4.8, tastingNotes: "Light, fruity, refreshing, Wisconsin-only" },
+            { brand: "Founders Porter", type: "Porter", brewery: "Founders Brewing Co.", origin: "USA", pricePer12Oz: 1.65, abv: 6.5, tastingNotes: "Dark chocolate, roasted malts, rich" },
+            { brand: "Deschutes Black Butte Porter", type: "Porter", brewery: "Deschutes Brewery", origin: "USA", pricePer12Oz: 1.75, abv: 5.2, tastingNotes: "Chocolate, coffee, creamy, balanced" },
+            { brand: "Weihenstephaner Hefeweissbier", type: "Wheat Beer", brewery: "Bayerische Staatsbrauerei Weihenstephan", origin: "Germany", pricePer12Oz: 2.00, abv: 5.4, tastingNotes: "Banana, clove, fruity, refreshing" },
+            { brand: "Paulaner Hefe-Weizen", type: "Wheat Beer", brewery: "Paulaner Brauerei", origin: "Germany", pricePer12Oz: 1.80, abv: 5.5, tastingNotes: "Classic wheat beer, banana, citrus" },
+            { brand: "Fat Tire Amber Ale", type: "Amber Ale", brewery: "New Belgium Brewing Co.", origin: "USA", pricePer12Oz: 1.35, abv: 5.2, tastingNotes: "Toasty, caramel, hint of fruitiness" },
+            { brand: "Goose Island IPA", type: "IPA", brewery: "Goose Island Beer Co.", origin: "USA", pricePer12Oz: 1.40, abv: 5.9, tastingNotes: "Fruity aroma, hoppy bitterness" },
+            { brand: "Kona Big Wave Golden Ale", type: "Golden Ale", brewery: "Kona Brewing Co.", origin: "USA", pricePer12Oz: 1.60, abv: 4.4, tastingNotes: "Light, clean, tropical hop aroma" },
+            { brand: "Sierra Nevada Torpedo Extra IPA", type: "Imperial IPA", brewery: "Sierra Nevada Brewing Co.", origin: "USA", pricePer12Oz: 1.70, abv: 7.2, tastingNotes: "Aggressive hops, pine, grapefruit" },
+            { brand: "Sam Adams Summer Ale", type: "Wheat Ale", brewery: "Boston Beer Company", origin: "USA", pricePer12Oz: 1.40, abv: 5.3, tastingNotes: "Lemon, orange peel, spicy Grains of Paradise" },
+
+            // High ABV beers
+            { brand: "New Belgium Trippel", type: "Belgian Tripel", brewery: "New Belgium Brewing Co.", origin: "USA", pricePer12Oz: 1.92, abv: 8.5, tastingNotes: "Fruity esters, spicy notes, dry finish" },
+            { brand: "Kentucky Bourbon Barrel Ale", type: "American Strong Ale", brewery: "Lexington Brewing & Distilling Co.", origin: "USA", pricePer12Oz: 3.75, abv: 8.2, tastingNotes: "Bourbon, vanilla, oak, caramel" },
+            { brand: "North Coast Brother Thelonious", type: "Belgian Strong Dark Ale", brewery: "North Coast Brewing Co.", origin: "USA", pricePer12Oz: 3.75, abv: 9.4, tastingNotes: "Rich, fruity, spicy, malty" },
+            { brand: "Evil Twin Imperial Biscotti Break", type: "Imperial Stout", brewery: "Evil Twin Brewing", origin: "Denmark/USA", pricePer12Oz: 2.25, abv: 11.5, tastingNotes: "Coffee, almond, vanilla, rich chocolate" },
+            { brand: "Tröegs Double Blizzard IPA", type: "Double IPA", brewery: "Tröegs Independent Brewing", origin: "USA", pricePer12Oz: 2.81, abv: 8.3, tastingNotes: "Dank, resinous, citrus, tropical fruit" },
+            { brand: "Flying Dog Gonzo Imperial Porter", type: "Imperial Porter", brewery: "Flying Dog Brewery", origin: "USA", pricePer12Oz: 2.50, abv: 10.0, tastingNotes: "Roasted malts, dark chocolate, coffee" },
+            { brand: "Bell's Hopslam Ale", type: "Double IPA", brewery: "Bell's Brewery", origin: "USA", pricePer12Oz: 3.17, abv: 10.0, tastingNotes: "Citrus, pine, tropical fruit, hoppy" },
+            { brand: "Sierra Nevada Bigfoot Barleywine", type: "Barleywine", brewery: "Sierra Nevada Brewing Co.", origin: "USA", pricePer12Oz: 2.50, abv: 9.6, tastingNotes: "Caramel, dried fruit, intense bitterness" },
+            { brand: "North Coast Old Rasputin", type: "Russian Imperial Stout", brewery: "North Coast Brewing Co.", origin: "USA", pricePer12Oz: 2.25, abv: 9.0, tastingNotes: "Roasted malts, chocolate, coffee, dark fruit" },
+            { brand: "Russian River Pliny the Elder", type: "Imperial IPA", brewery: "Russian River Brewing Co.", origin: "USA", pricePer12Oz: 5.99, abv: 8.0, tastingNotes: "Resinous, piney, citrusy, legendary" },
+            { brand: "Sierra Nevada Hop Bullet", type: "Imperial IPA", brewery: "Sierra Nevada Brewing Co.", origin: "USA", pricePer12Oz: 2.00, abv: 8.0, tastingNotes: "Pine, dank, grapefruit, intense hops" },
+            { brand: "Troegs Nimble Giant", type: "Double IPA", brewery: "Tröegs Independent Brewing", origin: "USA", pricePer12Oz: 2.63, abv: 9.0, tastingNotes: "Tropical, juicy, bright citrus, balanced" },
+
+            // Malt Liquors
+            { brand: "Steel Reserve 211", type: "Malt Liquor", brewery: "Miller Brewing Co.", origin: "USA", pricePer12Oz: 1.25, abv: 8.1, tastingNotes: "Strong, slightly sweet, minimal hop" },
+            { brand: "Natty Daddy", type: "Malt Liquor", brewery: "Anheuser-Busch", origin: "USA", pricePer12Oz: 0.80, abv: 8.0, tastingNotes: "Sweet, corn-like, high gravity" },
+            { brand: "Camo Black Ice", type: "Malt Liquor", brewery: "City Brewing Company", origin: "USA", pricePer12Oz: 1.50, abv: 10.5, tastingNotes: "Strong, sweet, smooth for its ABV" },
+            { brand: "Earthquake High Gravity Lager", type: "Malt Liquor", brewery: "City Brewing Company", origin: "USA", pricePer12Oz: 1.50, abv: 10.0, tastingNotes: "Sweet, strong, bready notes" },
+            { brand: "Axe Head Malt Liquor", type: "Malt Liquor", brewery: "Minhas Craft Brewery", origin: "Canada", pricePer12Oz: 1.60, abv: 11.0, tastingNotes: "Very strong, sweet, subtle fruit" },
+
+            // Rogue Beers (expanded)
+            { brand: "Rogue Dead Guy Ale", type: "Maibock", brewery: "Rogue Ales", origin: "USA", pricePer12Oz: 2.15, abv: 6.8, tastingNotes: "Malty, bready, honey, well-balanced" },
+            { brand: "Rogue Dead Guy Imperial IPA", type: "Imperial IPA", brewery: "Rogue Ales", origin: "USA", pricePer12Oz: 2.00, abv: 9.6, tastingNotes: "Bold hops, pine, citrus, strong" },
+            { brand: "Rogue Dead Guy IPA (West Coast)", type: "IPA", brewery: "Rogue Ales", origin: "USA", pricePer12Oz: 2.00, abv: 7.0, tastingNotes: "Tropical, citrus, pine, bitter" },
+            { brand: "Rogue Dead Guy Pilsner", type: "Pilsner", brewery: "Rogue Ales", origin: "USA", pricePer12Oz: 1.99, abv: 5.0, tastingNotes: "Crisp, clean, light hop, refreshing" },
+            { brand: "Rogue Batsquatch Hazy IPA", type: "Hazy IPA", brewery: "Rogue Ales", origin: "USA", pricePer12Oz: 2.25, abv: 6.7, tastingNotes: "Juicy, cloudy, tropical fruit aromas" },
+            { brand: "Rogue Hazelnut Brown Nectar Ale", type: "Brown Ale", brewery: "Rogue Ales", origin: "USA", pricePer12Oz: 1.99, abv: 5.6, tastingNotes: "Roasted hazelnut, caramel, smooth" },
+            { brand: "Rogue Pacific Northwest IPA", type: "IPA", brewery: "Rogue Ales", origin: "USA", pricePer12Oz: 2.00, abv: 6.9, tastingNotes: "Dank, piney, citrus, resinous" },
+
+            // Ciders
+            { brand: "Angry Orchard Crisp Apple", type: "Cider", brewery: "Angry Orchard Cider Co.", origin: "USA", pricePer12Oz: 1.50, abv: 5.0, tastingNotes: "Sweet, crisp apple flavor, refreshing" },
+            { brand: "Schilling Excelsior Hard Cider", type: "Imperial Cider", brewery: "Schilling Cider", origin: "USA", pricePer12Oz: 2.35, abv: 8.0, tastingNotes: "Complex, tart, apple-forward" },
+            { brand: "Crispin Imperial Cider", type: "Imperial Cider", brewery: "Crispin Cider Co.", origin: "USA", pricePer12Oz: 5.60, abv: 8.0, tastingNotes: "Dry, bittersweet apples, rich" },
+            { brand: "2 Towns Cosmic Crisp", type: "Imperial Cider", brewery: "2 Towns Ciderhouse", origin: "USA", pricePer12Oz: 1.90, abv: 9.0, tastingNotes: "Bright apple, tropical mango, tart" },
+            { brand: "Woodchuck Amber Hard Cider", type: "Cider", brewery: "Vermont Hard Cider Co.", origin: "USA", pricePer12Oz: 1.50, abv: 5.0, tastingNotes: "Semi-sweet, traditional apple, balanced" },
+            { brand: "Strongbow Original Dry", type: "Cider", brewery: "Heineken", origin: "UK", pricePer12Oz: 1.60, abv: 5.0, tastingNotes: "Dry, crisp, bittersweet apples" },
+
+            // New PNW / Washington Beers
+            { brand: "Space Dust IPA", type: "IPA", brewery: "Elysian Brewing Company", origin: "WA, USA", pricePer12Oz: 2.08, abv: 8.2, tastingNotes: "Hoppy, piney, citrusy, balanced" },
+            { brand: "Bodhizafa IPA", type: "IPA", brewery: "Georgetown Brewing Company", origin: "WA, USA", pricePer12Oz: 2.00, abv: 6.9, tastingNotes: "Juicy, tropical, low bitterness, hazy" },
+            { brand: "Manny's Pale Ale", type: "Pale Ale", brewery: "Georgetown Brewing Company", origin: "WA, USA", pricePer12Oz: 1.67, abv: 5.4, tastingNotes: "Clean, hoppy, sessionable" },
+            { brand: "Johnny Utah Pale Ale", type: "Pale Ale", brewery: "Georgetown Brewing Company", origin: "WA, USA", pricePer12Oz: 1.67, abv: 5.4, tastingNotes: "Citrusy, easy-drinking, slightly bitter" },
+            { brand: "Lush IPA", type: "Hazy IPA", brewery: "Fremont Brewing", origin: "WA, USA", pricePer12Oz: 2.00, abv: 7.0, tastingNotes: "Juicy, tropical, soft bitterness" },
+            { brand: "Bourbon Barrel Aged Dark Star", type: "Oatmeal Stout", brewery: "Fremont Brewing", origin: "WA, USA", pricePer12Oz: 4.50, abv: 14.1, tastingNotes: "Rich, boozy, coffee, chocolate, bourbon" },
+            { brand: "Topcutter IPA", type: "IPA", brewery: "Bale Breaker Brewing Company", origin: "WA, USA", pricePer12Oz: 1.83, abv: 6.8, tastingNotes: "Pine, citrus, crisp, classic IPA" },
+            { brand: "Bottomcutter Imperial IPA", type: "Imperial IPA", brewery: "Bale Breaker Brewing Company", origin: "WA, USA", pricePer12Oz: 2.50, abv: 8.2, tastingNotes: "Bold hops, stone fruit, pine, assertive bitterness" },
+            { brand: "African Amber", type: "Amber Ale", brewery: "Mac & Jack's Brewing Company", origin: "WA, USA", pricePer12Oz: 1.75, abv: 5.2, tastingNotes: "Caramel, nutty, balanced bitterness" },
+            { brand: "Blimey That's Bitter! Imperial IPA", type: "Imperial IPA", brewery: "Reuben's Brews", origin: "WA, USA", pricePer12Oz: 2.50, abv: 10.5, tastingNotes: "Assertive bitterness, citrus, pine, bold" },
+            { brand: "Gobsmacked! Imperial IPA", type: "Imperial IPA", brewery: "Reuben's Brews", origin: "WA, USA", pricePer12Oz: 2.50, abv: 10.0, tastingNotes: "Hoppy, complex, fruity, dank" }
+        ];
+
+        let currentSortColumn = null;
+        let currentSortOrder = 'asc'; // 'asc' for ascending, 'desc' for descending
+        let currentPriceUnit = '12oz'; // '12oz' or 'liter'
+
+        // Constants for conversions
+        const OZ_PER_LITER = 33.814;
+        const OZ_PER_12OZ_SERVING = 12;
+
+        // Function to calculate Price-to-Alcohol Value
+        function calculatePriceToAlcoholValue(price, abv) {
+            // Price-to-Alcohol Value = Price per 12oz / ABV (as a decimal)
+            // Lower value means more alcohol per dollar.
+            return abv > 0 ? (price / (abv / 100)) : NaN; // Return NaN for N/A cases to handle sorting
+        }
+
+        // Function to get the price based on selected unit
+        function getPriceForDisplay(beer, unit) {
+            if (unit === 'liter') {
+                // Convert 12oz price to liter price
+                return beer.pricePer12Oz * (OZ_PER_LITER / OZ_PER_12OZ_SERVING);
+            }
+            return beer.pricePer12Oz;
+        }
+
+        // Function to apply all filters and return the filtered data
+        function getFilteredData() {
+            const selectedType = document.getElementById('beerTypeFilter').value;
+            const searchBarText = document.getElementById('searchBar').value.toLowerCase();
+            const abvMin = parseFloat(document.getElementById('abvMin').value);
+            const abvMax = parseFloat(document.getElementById('abvMax').value);
+            const priceMin = parseFloat(document.getElementById('priceMin').value);
+            const priceMax = parseFloat(document.getElementById('priceMax').value);
+
+            let filtered = beerData.filter(beer => {
+                // Type filter
+                const typeMatch = selectedType === 'All' || beer.type === selectedType;
+
+                // Search filter (brand, brewery, type, tasting notes, origin)
+                const searchMatch = !searchBarText ||
+                                    beer.brand.toLowerCase().includes(searchBarText) ||
+                                    beer.brewery.toLowerCase().includes(searchBarText) ||
+                                    beer.type.toLowerCase().includes(searchBarText) ||
+                                    (beer.origin && beer.origin.toLowerCase().includes(searchBarText)) ||
+                                    (beer.tastingNotes && beer.tastingNotes.toLowerCase().includes(searchBarText));
+
+                // ABV range filter
+                const abvMatch = beer.abv >= abvMin && beer.abv <= abvMax;
+
+                // Price range filter (using current selected unit for comparison)
+                const priceValue = getPriceForDisplay(beer, currentPriceUnit);
+                const priceMatch = priceValue >= priceMin && priceValue <= priceMax;
+
+                return typeMatch && searchMatch && abvMatch && priceMatch;
+            });
+            return filtered;
+        }
+
+
+        // Function to render the table rows
+        function renderTable(data) {
+            const tableBody = document.getElementById('beerTableBody');
+            tableBody.innerHTML = ''; // Clear existing rows
+
+            document.getElementById('tablePriceUnit').textContent = `per ${currentPriceUnit === '12oz' ? '12oz' : 'Liter'}`;
+
+            data.forEach(beer => {
+                const row = document.createElement('tr');
+                row.classList.add('hover:bg-gray-50');
+
+                const priceForDisplay = getPriceForDisplay(beer, currentPriceUnit);
+                const priceToAlcoholNum = calculatePriceToAlcoholValue(beer.pricePer12Oz, beer.abv); // Price-to-alcohol always uses 12oz base
+                const priceToAlcoholDisplay = isNaN(priceToAlcoholNum) ? 'N/A' : `$${priceToAlcoholNum.toFixed(3)}/%ABV`;
+
+                row.innerHTML = `
+                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${beer.brand}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${beer.type}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${beer.brewery}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${beer.origin || 'N/A'}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">$${priceForDisplay.toFixed(2)}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${beer.abv.toFixed(1)}%</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${priceToAlcoholDisplay}</td>
+                    <td class="px-6 py-4 text-sm text-gray-500 max-w-xs truncate" title="${beer.tastingNotes || 'N/A'}">${beer.tastingNotes || 'N/A'}</td>
+                `;
+                tableBody.appendChild(row);
+            });
+        }
+
+        // Function to populate filter options
+        function populateFilter() {
+            const filterSelect = document.getElementById('beerTypeFilter');
+            filterSelect.innerHTML = '<option value="All">All Types</option>'; // Clear and add default
+            const beerTypes = [...new Set(beerData.map(beer => beer.type))].sort();
+            beerTypes.forEach(type => {
+                const option = document.createElement('option');
+                option.value = type;
+                option.textContent = type;
+                filterSelect.appendChild(option);
+            });
+        }
+
+        // Function to handle column sorting
+        function sortTable(column) {
+            let dataToSort = getFilteredData(); // Sort the currently filtered data
+
+            if (currentSortColumn === column) {
+                currentSortOrder = currentSortOrder === 'asc' ? 'desc' : 'asc';
+            } else {
+                currentSortColumn = column;
+                currentSortOrder = 'asc';
+            }
+
+            // Update sort icons
+            document.querySelectorAll('.sort-icon').forEach(icon => {
+                icon.classList.remove('active');
+                icon.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 11L12 6L17 11M17 13L12 18L7 13" />
+                                </svg>`;
+            });
+
+            const activeIcon = document.querySelector(`th[data-column="${column}"] .sort-icon`);
+            if (activeIcon) {
+                activeIcon.classList.add('active');
+                if (currentSortOrder === 'asc') {
+                    activeIcon.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7" />
+                                        </svg>`;
+                } else {
+                    activeIcon.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                                        </svg>`;
+                }
+            }
+
+            dataToSort.sort((a, b) => {
+                let valA, valB;
+
+                if (column === 'priceToAlcohol') {
+                    valA = calculatePriceToAlcoholValue(a.pricePer12Oz, a.abv);
+                    valB = calculatePriceToAlcoholValue(b.pricePer12Oz, b.abv);
+                } else if (column === 'pricePer12Oz') { // Handle price sorting based on current unit
+                    valA = getPriceForDisplay(a, currentPriceUnit);
+                    valB = getPriceForDisplay(b, currentPriceUnit);
+                }
+                else {
+                    valA = a[column];
+                    valB = b[column];
+                }
+
+                if (typeof valA === 'number' && typeof valB === 'number') {
+                    if (isNaN(valA) && !isNaN(valB)) return 1;
+                    if (!isNaN(valA) && isNaN(valB)) return -1;
+                    if (isNaN(valA) && isNaN(valB)) return 0;
+                    return currentSortOrder === 'asc' ? valA - valB : valB - valA;
+                }
+                else {
+                    const strA = String(valA).toLowerCase();
+                    const strB = String(valB).toLowerCase();
+                    if (strA < strB) return currentSortOrder === 'asc' ? -1 : 1;
+                    if (strA > strB) return currentSortOrder === 'asc' ? 1 : -1;
+                    return 0;
+                }
+            });
+            renderTable(dataToSort);
+            updateCharts(dataToSort); // Update charts after sorting and rendering table
+        }
+
+        // --- D3.js Charting Functions ---
+        const margin = { top: 30, right: 30, bottom: 60, left: 70 }; // Increased bottom/left for labels
+        const CHART_WIDTH = 550 - margin.left - margin.right;
+        const CHART_HEIGHT = 300 - margin.top - margin.bottom;
+
+        function renderValueChart(data) {
+            d3.select("#valueChart").selectAll("*").remove(); // Clear previous chart
+
+            const svg = d3.select("#valueChart")
+                .attr("viewBox", `0 0 ${CHART_WIDTH + margin.left + margin.right} ${CHART_HEIGHT + margin.top + margin.bottom}`)
+                .attr("preserveAspectRatio", "xMinYMin meet")
+                .append("g")
+                .attr("transform", `translate(${margin.left},${margin.top})`);
+
+            // Sort data by Price-to-Alcohol Value (ascending) and take top 10
+            const sortedData = data
+                .filter(d => !isNaN(calculatePriceToAlcoholValue(d.pricePer12Oz, d.abv)))
+                .sort((a, b) => calculatePriceToAlcoholValue(a.pricePer12Oz, a.abv) - calculatePriceToAlcoholValue(b.pricePer12Oz, b.abv))
+                .slice(0, 10);
+
+            if (sortedData.length === 0) {
+                svg.append("text")
+                    .attr("x", CHART_WIDTH / 2)
+                    .attr("y", CHART_HEIGHT / 2)
+                    .attr("text-anchor", "middle")
+                    .attr("fill", "#6b7280")
+                    .text("No data to display for chart with current filters.");
+                return;
+            }
+
+            const x = d3.scaleBand()
+                .range([0, CHART_WIDTH])
+                .domain(sortedData.map(d => d.brand))
+                .padding(0.2);
+
+            const y = d3.scaleLinear()
+                .domain([0, d3.max(sortedData, d => calculatePriceToAlcoholValue(d.pricePer12Oz, d.abv)) * 1.1]) // 10% padding
+                .range([CHART_HEIGHT, 0]);
+
+            svg.append("g")
+                .attr("transform", `translate(0,${CHART_HEIGHT})`)
+                .call(d3.axisBottom(x))
+                .selectAll("text")
+                .attr("transform", "translate(-10,0)rotate(-45)")
+                .style("text-anchor", "end");
+
+            svg.append("g")
+                .call(d3.axisLeft(y).tickFormat(d => `$${d.toFixed(1)}`));
+
+            svg.selectAll("bar")
+                .data(sortedData)
+                .enter()
+                .append("rect")
+                .attr("x", d => x(d.brand))
+                .attr("y", d => y(calculatePriceToAlcoholValue(d.pricePer12Oz, d.abv)))
+                .attr("width", x.bandwidth())
+                .attr("height", d => CHART_HEIGHT - y(calculatePriceToAlcoholValue(d.pricePer12Oz, d.abv)))
+                .attr("class", "bar");
+
+            // Y-axis label
+            svg.append("text")
+                .attr("transform", "rotate(-90)")
+                .attr("y", 0 - margin.left + 20)
+                .attr("x", 0 - (CHART_HEIGHT / 2))
+                .attr("dy", "1em")
+                .style("text-anchor", "middle")
+                .style("fill", "#4b5563")
+                .text("Price-to-Alcohol Value ($ / %ABV)");
+        }
+
+        function renderScatterPlot(data) {
+            d3.select("#scatterPlot").selectAll("*").remove(); // Clear previous chart
+
+            const svg = d3.select("#scatterPlot")
+                .attr("viewBox", `0 0 ${CHART_WIDTH + margin.left + margin.right} ${CHART_HEIGHT + margin.top + margin.bottom}`)
+                .attr("preserveAspectRatio", "xMinYMin meet")
+                .append("g")
+                .attr("transform", `translate(${margin.left},${margin.top})`);
+
+            // Filter out data points where price or ABV might be missing/invalid
+            const validData = data.filter(d => !isNaN(getPriceForDisplay(d, currentPriceUnit)) && !isNaN(d.abv) && d.abv > 0 && getPriceForDisplay(d, currentPriceUnit) > 0);
+
+             if (validData.length === 0) {
+                svg.append("text")
+                    .attr("x", CHART_WIDTH / 2)
+                    .attr("y", CHART_HEIGHT / 2)
+                    .attr("text-anchor", "middle")
+                    .attr("fill", "#6b7280")
+                    .text("No data to display for chart with current filters.");
+                return;
+            }
+
+            const x = d3.scaleLinear()
+                .domain([0, d3.max(validData, d => d.abv) * 1.1])
+                .range([0, CHART_WIDTH]);
+
+            const y = d3.scaleLinear()
+                .domain([0, d3.max(validData, d => getPriceForDisplay(d, currentPriceUnit)) * 1.1])
+                .range([CHART_HEIGHT, 0]);
+
+            svg.append("g")
+                .attr("transform", `translate(0,${CHART_HEIGHT})`)
+                .call(d3.axisBottom(x));
+
+            svg.append("g")
+                .call(d3.axisLeft(y).tickFormat(d => `$${d.toFixed(2)}`));
+
+            svg.selectAll("dot")
+                .data(validData)
+                .enter()
+                .append("circle")
+                .attr("cx", d => x(d.abv))
+                .attr("cy", d => y(getPriceForDisplay(d, currentPriceUnit)))
+                .attr("r", 5)
+                .attr("class", "dot")
+                .append("title") // Tooltip on hover
+                .text(d => `${d.brand} (${d.type})\nABV: ${d.abv.toFixed(1)}%\nPrice: $${getPriceForDisplay(d, currentPriceUnit).toFixed(2)}`);
+
+            // X-axis label
+            svg.append("text")
+                .attr("transform", `translate(${CHART_WIDTH / 2},${CHART_HEIGHT + margin.bottom - 10})`)
+                .style("text-anchor", "middle")
+                .style("fill", "#4b5563")
+                .text("Alcohol By Volume (ABV %)");
+
+            // Y-axis label
+            svg.append("text")
+                .attr("transform", "rotate(-90)")
+                .attr("y", 0 - margin.left + 20)
+                .attr("x", 0 - (CHART_HEIGHT / 2))
+                .attr("dy", "1em")
+                .style("text-anchor", "middle")
+                .style("fill", "#4b5563")
+                .text(`Avg. Price (${currentPriceUnit === '12oz' ? 'per 12oz' : 'per Liter'})`);
+        }
+
+        // Function to update all charts
+        function updateCharts(data) {
+            renderValueChart(data);
+            renderScatterPlot(data);
+        }
+
+        // --- Event Handlers and Initial Load ---
+        function applyFiltersAndSort() {
+            let dataToDisplay = getFilteredData();
+            if (currentSortColumn) {
+                // Re-apply sort using the sortTable function to ensure consistent state and icon updates
+                sortTable(currentSortColumn);
+            } else {
+                renderTable(dataToDisplay);
+                updateCharts(dataToDisplay);
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            populateFilter(); // Populate filter options on load
+
+            // Initialize sliders and display ranges
+            const abvMinSlider = document.getElementById('abvMin');
+            const abvMaxSlider = document.getElementById('abvMax');
+            const abvRangeDisplay = document.getElementById('abvRangeDisplay');
+            const priceMinSlider = document.getElementById('priceMin');
+            const priceMaxSlider = document.getElementById('priceMax');
+            const priceRangeDisplay = document.getElementById('priceRangeDisplay');
+            const currentPriceUnitDisplay = document.getElementById('currentPriceUnitDisplay');
+            const priceUnitSelect = document.getElementById('priceUnit');
+            const searchBar = document.getElementById('searchBar');
+
+            const updateAbvRangeDisplay = () => {
+                abvRangeDisplay.textContent = `${abvMinSlider.value}% - ${abvMaxSlider.value}%`;
+            };
+            const updatePriceRangeDisplay = () => {
+                priceRangeDisplay.textContent = `$${parseFloat(priceMinSlider.value).toFixed(2)} - $${parseFloat(priceMaxSlider.value).toFixed(2)}`;
+                currentPriceUnitDisplay.textContent = `per ${currentPriceUnit === '12oz' ? '12oz' : 'Liter'}`;
+            };
+
+            // Set initial slider values and ranges based on data for a better user experience
+            const maxAbv = d3.max(beerData, d => d.abv);
+            const maxPrice12oz = d3.max(beerData, d => d.pricePer12Oz);
+            const maxPriceLiter = maxPrice12oz * (OZ_PER_LITER / OZ_PER_12OZ_SERVING);
+
+            abvMinSlider.max = (maxAbv * 1.1).toFixed(1); // Set max slightly above actual max
+            abvMaxSlider.max = (maxAbv * 1.1).toFixed(1);
+            abvMaxSlider.value = abvMaxSlider.max; // Set initial max to actual max
+
+            priceMinSlider.max = (maxPrice12oz * 1.1).toFixed(1);
+            priceMaxSlider.max = (maxPrice12oz * 1.1).toFixed(1);
+            priceMaxSlider.value = priceMaxSlider.max;
+
+            updateAbvRangeDisplay();
+            updatePriceRangeDisplay();
+
+            // Event Listeners for Filters
+            document.getElementById('beerTypeFilter').addEventListener('change', applyFiltersAndSort);
+            searchBar.addEventListener('input', applyFiltersAndSort);
+
+            abvMinSlider.addEventListener('input', () => {
+                if (parseFloat(abvMinSlider.value) > parseFloat(abvMaxSlider.value)) {
+                    abvMaxSlider.value = abvMinSlider.value;
+                }
+                updateAbvRangeDisplay();
+                applyFiltersAndSort();
+            });
+            abvMaxSlider.addEventListener('input', () => {
+                if (parseFloat(abvMaxSlider.value) < parseFloat(abvMinSlider.value)) {
+                    abvMinSlider.value = abvMaxSlider.value;
+                }
+                updateAbvRangeDisplay();
+                applyFiltersAndSort();
+            });
+
+            priceMinSlider.addEventListener('input', () => {
+                if (parseFloat(priceMinSlider.value) > parseFloat(priceMaxSlider.value)) {
+                    priceMaxSlider.value = priceMinSlider.value;
+                }
+                updatePriceRangeDisplay();
+                applyFiltersAndSort();
+            });
+            priceMaxSlider.addEventListener('input', () => {
+                if (parseFloat(priceMaxSlider.value) < parseFloat(priceMinSlider.value)) {
+                    priceMinSlider.value = priceMaxSlider.value;
+                }
+                updatePriceRangeDisplay();
+                applyFiltersAndSort();
+            });
+
+            priceUnitSelect.addEventListener('change', (event) => {
+                currentPriceUnit = event.target.value;
+
+                // Store current slider values as 12oz equivalent before recalculating max
+                const currentMin12oz = parseFloat(priceMinSlider.value) / (currentPriceUnit === 'liter' ? (OZ_PER_LITER / OZ_PER_12OZ_SERVING) : 1);
+                const currentMax12oz = parseFloat(priceMaxSlider.value) / (currentPriceUnit === 'liter' ? (OZ_PER_LITER / OZ_PER_12OZ_SERVING) : 1);
+
+
+                // Adjust slider max values based on new unit
+                if (currentPriceUnit === 'liter') {
+                    priceMinSlider.max = (maxPriceLiter * 1.1).toFixed(1);
+                    priceMaxSlider.max = (maxPriceLiter * 1.1).toFixed(1);
+                    // Adjust current values proportionally to maintain range if possible, or reset
+                    priceMinSlider.value = (currentMin12oz * (OZ_PER_LITER / OZ_PER_12OZ_SERVING)).toFixed(1);
+                    priceMaxSlider.value = (currentMax12oz * (OZ_PER_LITER / OZ_PER_12OZ_SERVING)).toFixed(1);
+                } else { // Back to 12oz
+                    priceMinSlider.max = (maxPrice12oz * 1.1).toFixed(1);
+                    priceMaxSlider.max = (maxPrice12oz * 1.1).toFixed(1);
+                    // Adjust current values proportionally
+                    priceMinSlider.value = currentMin12oz.toFixed(1);
+                    priceMaxSlider.value = currentMax12oz.toFixed(1);
+                }
+
+                updatePriceRangeDisplay();
+                applyFiltersAndSort(); // Re-render table and charts with new unit
+            });
+
+            // Event listeners for column headers for sorting
+            document.querySelectorAll('#beerTable th[data-column]').forEach(header => {
+                header.addEventListener('click', () => {
+                    const column = header.dataset.column;
+                    sortTable(column);
+                });
+            });
+
+            // Initial render
+            applyFiltersAndSort();
+        });
+    </script>
+</body>
+</html>
